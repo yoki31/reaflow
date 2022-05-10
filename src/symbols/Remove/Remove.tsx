@@ -46,7 +46,7 @@ export const Remove: FC<Partial<RemoveProps>> = ({
         className={css.drop}
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
-        onClick={(event) => {
+        onClick={event => {
           event.preventDefault();
           event.stopPropagation();
           onClick(event);

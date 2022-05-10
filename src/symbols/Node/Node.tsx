@@ -3,7 +3,9 @@ import React, {
   Fragment,
   ReactElement,
   ReactNode,
+  useCallback,
   useEffect,
+  useRef,
   useState
 } from 'react';
 import { motion, useAnimation } from 'framer-motion';
@@ -79,11 +81,14 @@ export interface NodeProps extends NodeDragEvents<NodeData, PortData> {
     event: React.MouseEvent<SVGGElement, MouseEvent>,
     data: NodeData
   ) => void;
+
   onKeyDown?: (event: React.KeyboardEvent<SVGGElement>, data: NodeData) => void;
+
   onEnter?: (
     event: React.MouseEvent<SVGGElement, MouseEvent>,
     node: NodeData
   ) => void;
+
   onLeave?: (
     event: React.MouseEvent<SVGGElement, MouseEvent>,
     node: NodeData
@@ -92,6 +97,7 @@ export interface NodeProps extends NodeDragEvents<NodeData, PortData> {
   childNode?:
     | ReactElement<NodeProps, typeof Node>
     | ((node: NodeProps) => ReactElement<NodeProps, typeof Node>);
+
   childEdge?:
     | ReactElement<EdgeProps, typeof Edge>
     | ((edge: EdgeProps) => ReactElement<NodeProps, typeof Edge>);
@@ -134,32 +140,28 @@ export const Node: FC<Partial<NodeProps>> = ({
   remove = <Remove />,
   port = <Port />,
   label = <Label />,
-  onRemove = () => undefined,
-  onDrag = () => undefined,
-  onDragStart = () => undefined,
-  onDragEnd = () => undefined,
-  onClick = () => undefined,
-  onKeyDown = () => undefined,
-  onEnter = () => undefined,
-  onLeave = () => undefined
+  onRemove,
+  onDrag,
+  onDragStart,
+  onDragEnd,
+  onClick,
+  onKeyDown,
+  onEnter,
+  onLeave
 }) => {
+  const nodeRef = useRef<SVGRectElement | null>(null);
   const controls = useAnimation();
-  const {
-    canLinkNode,
-    enteredNode,
-    selections,
-    readonly,
-    ...canvas
-  } = useCanvas();
+  const { canLinkNode, enteredNode, selections, readonly, ...canvas } =
+    useCanvas();
   const [deleteHovered, setDeleteHovered] = useState<boolean>(false);
   const [dragging, setDragging] = useState<boolean>(false);
+  const [isLinkable, setIsLinkable] = useState<boolean>(true);
   const isActive = selections?.length
     ? selections.includes(properties.id)
     : null;
   const isNodeDrag = id.includes('node-drag');
   const newX = x + offsetX;
   const newY = y + offsetY;
-  const isLinkable = checkNodeLinkable(properties, enteredNode, canLinkNode);
   const isMultiPort =
     dragType === 'multiportOnly' &&
     ports?.filter(p => !p.properties?.hidden).length > 1;
@@ -169,23 +171,26 @@ export const Node: FC<Partial<NodeProps>> = ({
     : draggable;
   const canSelect = selectable && !properties?.selectionDisabled;
 
-  const getDragType = (hasPort: boolean) => {
-    let activeDragType: NodeDragType = null;
-    if (!hasPort) {
-      if (dragType === 'all' || dragType === 'node') {
-        activeDragType = 'node';
-      } else if (!isMultiPort) {
-        activeDragType = 'port';
+  const getDragType = useCallback(
+    (hasPort: boolean) => {
+      let activeDragType: NodeDragType = null;
+      if (!hasPort) {
+        if (dragType === 'all' || dragType === 'node') {
+          activeDragType = 'node';
+        } else if (!isMultiPort) {
+          activeDragType = 'port';
+        }
+      } else {
+        if (dragType === 'all' || dragType === 'port' || isMultiPort) {
+          activeDragType = 'port';
+        }
       }
-    } else {
-      if (dragType === 'all' || dragType === 'port' || isMultiPort) {
-        activeDragType = 'port';
-      }
-    }
-    return activeDragType;
-  };
+      return activeDragType;
+    },
+    [dragType, isMultiPort]
+  );
 
-  const setDragCursor = (dragType: NodeDragType | null) => {
+  const setDragCursor = useCallback((dragType: NodeDragType | null) => {
     if (dragType) {
       document.body.classList.add('dragging');
       document.body.style.cursor = dragType === 'node' ? 'grab' : 'crosshair';
@@ -193,7 +198,7 @@ export const Node: FC<Partial<NodeProps>> = ({
       document.body.classList.remove('dragging');
       document.body.style.cursor = 'auto';
     }
-  };
+  }, []);
 
   const bind = useNodeDrag({
     x: newX,
@@ -206,7 +211,7 @@ export const Node: FC<Partial<NodeProps>> = ({
     onDrag: (...props) => {
       if (!isDisabled && canDrag) {
         canvas.onDrag(...props);
-        onDrag(...props);
+        onDrag?.(...props);
       }
     },
     onDragStart: (event, coords, node, port) => {
@@ -217,7 +222,7 @@ export const Node: FC<Partial<NodeProps>> = ({
         setDragCursor(event.dragType);
 
         canvas.onDragStart(event, coords, node, port);
-        onDragStart(event, coords, node, port);
+        onDragStart?.(event, coords, node, port);
         setDragging(true);
       }
     },
@@ -225,14 +230,24 @@ export const Node: FC<Partial<NodeProps>> = ({
       if (!isDisabled && canDrag) {
         // @ts-ignore
         event.dragType = getDragType(false);
+        // @ts-ignore
+        event.srcElement = nodeRef.current;
 
         canvas.onDragEnd(event, coords, node, port);
-        onDragEnd(event, coords, node, port);
+        onDragEnd?.(event, coords, node, port);
         setDragging(false);
         setDragCursor(null);
       }
     }
   });
+
+  useEffect(() => {
+    if (enteredNode?.id === properties.id) {
+      setIsLinkable(checkNodeLinkable(properties, enteredNode, canLinkNode));
+    }
+
+    return () => setIsLinkable(true);
+  }, [canLinkNode, enteredNode, properties]);
 
   useEffect(() => {
     controls.set({
@@ -252,6 +267,111 @@ export const Node: FC<Partial<NodeProps>> = ({
     edges
   };
 
+  const onClickCallback = useCallback(
+    event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isDisabled && canSelect) {
+        onClick?.(event, properties);
+      }
+    },
+    [canSelect, isDisabled, onClick, properties]
+  );
+
+  const onKeyDownCallback = useCallback(
+    event => {
+      event.preventDefault();
+      if (!isDisabled) {
+        onKeyDown?.(event, properties);
+      }
+    },
+    [isDisabled, onKeyDown, properties]
+  );
+
+  const onTouchStartCallback = useCallback(event => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
+  const onMouseEnterCallback = useCallback(
+    event => {
+      event.stopPropagation();
+      canvas.onEnter(event, properties);
+      if (!isDisabled) {
+        onEnter?.(event, properties);
+      }
+    },
+    [canvas, isDisabled, onEnter, properties]
+  );
+
+  const onMouseLeaveCallback = useCallback(
+    event => {
+      event.stopPropagation();
+      canvas.onLeave(event, properties);
+      if (!isDisabled) {
+        onLeave?.(event, properties);
+      }
+    },
+    [canvas, isDisabled, onLeave, properties]
+  );
+
+  const onDragStartCallback = useCallback(
+    (event: DragEvent, initial: Position, data: PortData) => {
+      if (!isDisabled && linkable) {
+        // @ts-ignore
+        event.dragType = getDragType(true);
+        // @ts-ignore
+        setDragCursor(event.dragType);
+
+        canvas.onDragStart(event, initial, properties, data);
+        onDragStart?.(event, initial, properties, data);
+        setDragging(true);
+      }
+    },
+    [
+      canvas,
+      getDragType,
+      isDisabled,
+      linkable,
+      onDragStart,
+      properties,
+      setDragCursor
+    ]
+  );
+
+  const onDragCallback = useCallback(
+    (event: DragEvent, initial: Position, data: PortData) => {
+      if (!isDisabled && linkable) {
+        canvas.onDrag(event, initial, properties, data);
+        onDrag?.(event, initial, properties, data);
+      }
+    },
+    [canvas, isDisabled, linkable, onDrag, properties]
+  );
+
+  const onDragEndCallback = useCallback(
+    (event: DragEvent, initial: Position, data: PortData) => {
+      if (!isDisabled && linkable) {
+        // @ts-ignore
+        event.dragType = getDragType(true);
+        setDragCursor(null);
+
+        canvas.onDragEnd(event, initial, properties, data);
+        onDragEnd?.(event, initial, properties, data);
+        setDragging(false);
+      }
+    },
+    [
+      canvas,
+      getDragType,
+      isDisabled,
+      linkable,
+      onDragEnd,
+      properties,
+      setDragCursor
+    ]
+  );
+
   return (
     <motion.g
       id={id}
@@ -265,38 +385,13 @@ export const Node: FC<Partial<NodeProps>> = ({
     >
       <motion.rect
         {...bind()}
+        ref={nodeRef}
         tabIndex={-1}
-        onKeyDown={event => {
-          event.preventDefault();
-          if (!isDisabled) {
-            onKeyDown(event, properties);
-          }
-        }}
-        onClick={event => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (!isDisabled && canSelect) {
-            onClick(event, properties);
-          }
-        }}
-        onTouchStart={event => {
-          event.preventDefault();
-          event.stopPropagation();
-        }}
-        onMouseEnter={event => {
-          event.stopPropagation();
-          canvas.onEnter(event, properties);
-          if (!isDisabled) {
-            onEnter(event, properties);
-          }
-        }}
-        onMouseLeave={event => {
-          event.stopPropagation();
-          canvas.onLeave(event, properties);
-          if (!isDisabled) {
-            onLeave(event, properties);
-          }
-        }}
+        onKeyDown={onKeyDownCallback}
+        onClick={onClickCallback}
+        onTouchStart={onTouchStartCallback}
+        onMouseEnter={onMouseEnterCallback}
+        onMouseLeave={onMouseLeaveCallback}
         className={classNames(css.rect, className, properties?.className, {
           [css.active]: isActive,
           [css.disabled]: isDisabled,
@@ -348,43 +443,9 @@ export const Node: FC<Partial<NodeProps>> = ({
             disabled={isDisabled || !linkable}
             offsetX={newX}
             offsetY={newY}
-            onDragStart={(
-              event: DragEvent,
-              initial: Position,
-              data: PortData
-            ) => {
-              if (!isDisabled && linkable) {
-                // @ts-ignore
-                event.dragType = getDragType(true);
-                // @ts-ignore
-                setDragCursor(event.dragType);
-
-                canvas.onDragStart(event, initial, properties, data);
-                onDragStart(event, initial, properties, data);
-                setDragging(true);
-              }
-            }}
-            onDrag={(event: DragEvent, initial: Position, data: PortData) => {
-              if (!isDisabled && linkable) {
-                canvas.onDrag(event, initial, properties, data);
-                onDrag(event, initial, properties, data);
-              }
-            }}
-            onDragEnd={(
-              event: DragEvent,
-              initial: Position,
-              data: PortData
-            ) => {
-              if (!isDisabled && linkable) {
-                // @ts-ignore
-                event.dragType = getDragType(true);
-                setDragCursor(null);
-
-                canvas.onDragEnd(event, initial, properties, data);
-                onDragEnd(event, initial, properties, data);
-                setDragging(false);
-              }
-            }}
+            onDragStart={onDragStartCallback}
+            onDrag={onDragCallback}
+            onDragEnd={onDragEndCallback}
             {...(p as PortProps)}
             id={`${id}-port-${p.id}`}
           />
@@ -397,7 +458,7 @@ export const Node: FC<Partial<NodeProps>> = ({
           onClick={(event: React.MouseEvent<SVGGElement, MouseEvent>) => {
             event.preventDefault();
             event.stopPropagation();
-            onRemove(event, properties);
+            onRemove?.(event, properties);
             setDeleteHovered(false);
           }}
           onEnter={() => setDeleteHovered(true)}
@@ -416,6 +477,10 @@ export const Node: FC<Partial<NodeProps>> = ({
                 id={`${id}-edge-${e.id}`}
                 disabled={isDisabled}
                 {...e}
+                properties={{
+                  ...e.properties,
+                  ...(e.data ? { data: e.data } : {})
+                }}
               />
             );
           })}
@@ -423,25 +488,49 @@ export const Node: FC<Partial<NodeProps>> = ({
           nodes.map(({ children, ...n }: any) => {
             const element =
               typeof childNode === 'function' ? childNode(n) : childNode;
+            const elementDisabled =
+              element.props?.disabled != null
+                ? element.props.disabled
+                : disabled;
+            const elementAnimated =
+              element.props?.animated != null
+                ? element.props.animated
+                : animated;
+            const elementDraggable =
+              element.props?.draggable != null
+                ? element.props.draggable
+                : draggable;
+            const elementLinkable =
+              element.props?.linkable != null
+                ? element.props.linkable
+                : linkable;
+            const elementSelectable =
+              element.props?.selectable != null
+                ? element.props.selectable
+                : selectable;
+            const elementRemovable =
+              element.props?.removable != null
+                ? element.props.removable
+                : removable;
             return (
               <CloneElement<NodeProps>
                 key={n.id}
                 element={element}
                 id={`${id}-node-${n.id}`}
-                disabled={isDisabled}
+                disabled={elementDisabled}
                 nodes={children}
                 offsetX={newX}
                 offsetY={newY}
-                animated={animated}
+                animated={elementAnimated}
                 children={element.props.children}
                 childNode={childNode}
                 dragCursor={dragCursor}
                 dragType={dragType}
                 childEdge={childEdge}
-                draggable={draggable}
-                linkable={linkable}
-                selectable={selectable}
-                removable={removable}
+                draggable={elementDraggable}
+                linkable={elementLinkable}
+                selectable={elementSelectable}
+                removable={elementRemovable}
                 onDragStart={onDragStart}
                 onDrag={onDrag}
                 onDragEnd={onDragEnd}

@@ -1,4 +1,4 @@
-<p align="center">
+<div align="center">
   <h1>🕸 reaflow</h1>
   <br />
   Node-based Visualizations for React
@@ -24,12 +24,14 @@
   <a href="https://opencollective.com/reaviz">
     <img alt="Open Collective backers and sponsors" src="https://img.shields.io/opencollective/all/reaviz?label=backers">
   </a>
-</p>
+</div>
 
 ---
 
 REAFLOW is a modular diagram engine for building static or interactive editors. The library is feature-rich and modular allowing for displaying complex
 visualizations with total customizability.
+
+If you are looking for network graphs, checkout [reagraph](https://reagraph.dev).
 
 ## 🚀 Quick Links
 

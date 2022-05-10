@@ -1,3 +1,43 @@
+# 5.0.5 - 5/10/22
+- [chore] bump rdk
+
+# 5.0.4
+- [fix] Change center and centerCanvas to defaultPosition and positionCanvas for more flexible placement options #154
+
+# 5.0.3 - 4/6/22
+- [chore] bump rdk
+
+# 5.0.2 - 4/5/22
+- [chore] fix framer-motion
+
+# 5.0.1 - 4/4/22
+- [fix] Edge labels extra data #151
+
+# 5.0.0 - 4/4/22
+- [chore] upgrade react
+- [chore] upgrade framer-motion
+
+# 4.2.17 - 3/31/22
+- [fix] Fixes missing data in nested edges #150
+
+# 4.2.16 - 3/30/22
+- [fix] Fix data attribute in edge #149
+
+# 4.2.16 - 2/3/22
+- [fix] improve edge custom styling #143
+
+# 4.2.15 - 12/28/21
+- [fix] Pass children to edge cloned element #136
+
+# 4.2.14 - 12/6/21
+- [fix] Improve performance and add memorization #130
+
+# 4.2.13 - 12/2/21
+- [fix] fix unnecessary re-renders #127
+
+# 4.2.12 - 11/23/21
+- [fix] Pass Node ref to event at srcElement prop #125
+
 # 4.2.11 - 11/1/21
 - [fix] fix useUndo functions(count, history, clear) #117
 

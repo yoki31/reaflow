@@ -22,7 +22,7 @@ import {
   ElkCanvasLayoutOptions
 } from './layout';
 import { MarkerArrow, MarkerArrowProps } from './symbols/Arrow';
-import { EdgeData, NodeData, PortData } from './types';
+import { CanvasPosition, EdgeData, NodeData, PortData } from './types';
 import classNames from 'classnames';
 import { CanvasProvider, useCanvas } from './utils/CanvasProvider';
 import { getDragNodeData } from './utils/helpers';
@@ -62,9 +62,9 @@ export interface CanvasContainerProps extends CanvasProps {
   zoomable?: boolean;
 
   /**
-   * Center the canvas on load or not.
+   * Where to position the canvas on load (if at all)
    */
-  center?: boolean;
+  defaultPosition?: CanvasPosition;
 
   /**
    * Fit the canvas on load.
@@ -166,19 +166,23 @@ export interface CanvasProps {
   /**
    * Element of the drag edge.
    */
-  dragEdge?: ReactElement<EdgeProps, typeof Edge>;
+  dragEdge?:
+    | ReactElement<EdgeProps, typeof Edge>
+    | ((edge: EdgeProps) => ReactElement<EdgeProps, typeof Edge>)
+    | null;
 
   /**
    * Element of the drag node.
    */
   dragNode?:
     | ReactElement<NodeProps, typeof Node>
-    | ((node: NodeProps) => ReactElement<NodeProps, typeof Node>);
+    | ((node: NodeProps) => ReactElement<NodeProps, typeof Node>)
+    | null;
 
   /**
    * Arrow shown on the edges.
    */
-  arrow?: ReactElement<MarkerArrowProps, typeof MarkerArrow>;
+  arrow?: ReactElement<MarkerArrowProps, typeof MarkerArrow> | null;
 
   /**
    * Node or node callback to return element.
@@ -248,7 +252,7 @@ const InternalCanvas: FC<CanvasProps & { ref?: Ref<CanvasRef> }> = forwardRef(
       observe,
       zoomIn,
       zoomOut,
-      centerCanvas,
+      positionCanvas,
       fitCanvas,
       ...rest
     } = useCanvas();
@@ -264,7 +268,7 @@ const InternalCanvas: FC<CanvasProps & { ref?: Ref<CanvasRef> }> = forwardRef(
       containerRef,
       canvasWidth,
       svgRef,
-      centerCanvas,
+      positionCanvas,
       setZoom,
       zoomIn,
       zoomOut,
@@ -292,6 +296,10 @@ const InternalCanvas: FC<CanvasProps & { ref?: Ref<CanvasRef> }> = forwardRef(
       }
     }, [layout, xy]);
 
+    const onDragStart = useCallback(event => {
+      setDragType(event.dragType);
+    }, []);
+
     const createDragNodeChildren = useCallback(
       (children: any) => {
         if (!children || !Array.isArray(children)) {
@@ -314,9 +322,7 @@ const InternalCanvas: FC<CanvasProps & { ref?: Ref<CanvasRef> }> = forwardRef(
               childEdge={dragEdge}
               childNode={dragNode}
               {...n}
-              onDragStart={event => {
-                setDragType(event.dragType);
-              }}
+              onDragStart={onDragStart}
               id={`${id}-node-${n.id}-node-drag`}
             />
           );
@@ -413,9 +419,7 @@ const InternalCanvas: FC<CanvasProps & { ref?: Ref<CanvasRef> }> = forwardRef(
                   childEdge={edge}
                   childNode={node}
                   {...n}
-                  onDragStart={event => {
-                    setDragType(event.dragType);
-                  }}
+                  onDragStart={onDragStart}
                   id={`${id}-node-${n.id}`}
                 />
               );
@@ -427,7 +431,12 @@ const InternalCanvas: FC<CanvasProps & { ref?: Ref<CanvasRef> }> = forwardRef(
                   key={e.id}
                   element={element}
                   disabled={disabled}
+                  children={element.props.children}
                   {...e}
+                  properties={{
+                    ...e.properties,
+                    ...(e.data ? { data: e.data } : {})
+                  }}
                   id={`${id}-edge-${e.id}`}
                 />
               );
@@ -495,56 +504,55 @@ const InternalCanvas: FC<CanvasProps & { ref?: Ref<CanvasRef> }> = forwardRef(
   }
 );
 
-export const Canvas: FC<
-  CanvasContainerProps & { ref?: Ref<CanvasRef> }
-> = forwardRef(
-  (
-    {
-      selections = [],
-      readonly = false,
-      fit = false,
-      nodes = [],
-      edges = [],
-      maxHeight = 2000,
-      maxWidth = 2000,
-      direction = 'DOWN',
-      pannable = true,
-      zoom = 1,
-      center = true,
-      zoomable = true,
-      minZoom = -0.5,
-      maxZoom = 1,
-      onNodeLink = () => undefined,
-      onNodeLinkCheck = () => undefined,
-      onLayoutChange = () => undefined,
-      onZoomChange = () => undefined,
-      layoutOptions,
-      ...rest
-    },
-    ref: Ref<CanvasRef>
-  ) => (
-    <CanvasProvider
-      layoutOptions={layoutOptions}
-      nodes={nodes}
-      edges={edges}
-      zoom={zoom}
-      center={center}
-      minZoom={minZoom}
-      maxZoom={maxZoom}
-      fit={fit}
-      maxHeight={maxHeight}
-      maxWidth={maxWidth}
-      direction={direction}
-      pannable={pannable}
-      zoomable={zoomable}
-      readonly={readonly}
-      onLayoutChange={onLayoutChange}
-      selections={selections}
-      onZoomChange={onZoomChange}
-      onNodeLink={onNodeLink}
-      onNodeLinkCheck={onNodeLinkCheck}
-    >
-      <InternalCanvas ref={ref} {...rest} />
-    </CanvasProvider>
-  )
-);
+export const Canvas: FC<CanvasContainerProps & { ref?: Ref<CanvasRef> }> =
+  forwardRef(
+    (
+      {
+        selections = [],
+        readonly = false,
+        fit = false,
+        nodes = [],
+        edges = [],
+        maxHeight = 2000,
+        maxWidth = 2000,
+        direction = 'DOWN',
+        pannable = true,
+        zoom = 1,
+        defaultPosition = CanvasPosition.CENTER,
+        zoomable = true,
+        minZoom = -0.5,
+        maxZoom = 1,
+        onNodeLink = () => undefined,
+        onNodeLinkCheck = () => undefined,
+        onLayoutChange = () => undefined,
+        onZoomChange = () => undefined,
+        layoutOptions,
+        ...rest
+      },
+      ref: Ref<CanvasRef>
+    ) => (
+      <CanvasProvider
+        layoutOptions={layoutOptions}
+        nodes={nodes}
+        edges={edges}
+        zoom={zoom}
+        defaultPosition={defaultPosition}
+        minZoom={minZoom}
+        maxZoom={maxZoom}
+        fit={fit}
+        maxHeight={maxHeight}
+        maxWidth={maxWidth}
+        direction={direction}
+        pannable={pannable}
+        zoomable={zoomable}
+        readonly={readonly}
+        onLayoutChange={onLayoutChange}
+        selections={selections}
+        onZoomChange={onZoomChange}
+        onNodeLink={onNodeLink}
+        onNodeLinkCheck={onNodeLinkCheck}
+      >
+        <InternalCanvas ref={ref} {...rest} />
+      </CanvasProvider>
+    )
+  );

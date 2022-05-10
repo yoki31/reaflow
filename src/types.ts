@@ -1,5 +1,13 @@
 import { ElkNodeLayoutOptions } from './layout';
 
+export enum CanvasPosition {
+  CENTER = 'center',
+  TOP = 'top',
+  LEFT = 'left',
+  RIGHT = 'right',
+  BOTTOM = 'bottom'
+}
+
 export interface NodeData<T = any> {
   /**
    * Unique ID for the node.
@@ -134,9 +142,14 @@ export interface EdgeData<T = any> {
   data?: T;
 
   /**
-   * CSS Classname for the edge.
+   * CSS class name for the edge ("path" element).
    */
   className?: string;
+
+  /**
+   * CSS class name for the edge (main "g" element).
+   */
+  containerClassName?: string;
 
   /**
    * Optional arrow head type.
